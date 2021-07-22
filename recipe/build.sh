@@ -8,7 +8,6 @@ sed -i -e "s:\${PREFIX}:${PREFIX}:" tensorflow/core/platform/default/build_confi
 mkdir -p ./bazel_output_base
 export BAZEL_OPTS=""
 
-# cp ${RECIPE_DIR}/lin_bazelrc .bazelrc
 # Compile tensorflow from source
 export PYTHON_BIN_PATH=${PYTHON}
 export PYTHON_LIB_PATH=${SP_DIR}
@@ -24,7 +23,6 @@ export CC_OPT_FLAGS="-march=nocona -mtune=haswell"
 export TF_ENABLE_XLA=1
 export TF_NEED_OPENCL=0
 export TF_NEED_OPENCL_SYCL=0
-export TF_NEED_COMPUTECPP=0
 export TF_NEED_COMPUTECPP=0
 export TF_NEED_ROCM=0
 export TF_NEED_MPI=0
@@ -86,6 +84,7 @@ bazel ${BAZEL_OPTS} build \
     --verbose_failures \
     --config=opt \
     --config=cuda \
+	--config=mkl \
     --strip=always \
     --color=yes \
     --curses=no \
@@ -104,7 +103,7 @@ mkdir -p $SRC_DIR/tensorflow_pkg
 bazel-bin/tensorflow/tools/pip_package/build_pip_package $SRC_DIR/tensorflow_pkg
 
 # install using pip from the whl file
-pip install --no-deps $SRC_DIR/tensorflow_pkg/*.whl
+${PYTHON} -m pip install --no-deps $SRC_DIR/tensorflow_pkg/*.whl
 
 # The tensorboard package has the proper entrypoint
 rm -f ${PREFIX}/bin/tensorboard
