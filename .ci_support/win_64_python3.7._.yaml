@@ -1,0 +1,66 @@
+abseil_cpp:
+- '20210324.2'
+aws_sdk_cpp:
+- 1.8.185
+c_compiler:
+- vs2017
+channel_sources:
+- deepmodeling,defaults
+channel_targets:
+- deepmodeling main
+cuda_compiler_version:
+- None
+cudnn:
+- undefined
+curl:
+- '7'
+cxx_compiler:
+- vs2017
+giflib:
+- '5.2'
+grpc_cpp:
+- '1.38'
+icu:
+- '68'
+jpeg:
+- '9'
+libcurl:
+- '7'
+libpng:
+- '1.6'
+libprotobuf:
+- '3.16'
+openssl:
+- 1.1.1
+pin_run_as_build:
+  curl:
+    max_pin: x
+  jpeg:
+    max_pin: x
+  libcurl:
+    max_pin: x
+  libpng:
+    max_pin: x.x
+  openssl:
+    max_pin: x.x.x
+  python:
+    min_pin: x.x
+    max_pin: x.x
+  sqlite:
+    max_pin: x
+  zlib:
+    max_pin: x.x
+python:
+- 3.7.*
+snappy:
+- '1'
+sqlite:
+- '3'
+target_platform:
+- win-64
+tflow_variant:
+- gpu
+vc:
+- '14'
+zlib:
+- '1.2'
