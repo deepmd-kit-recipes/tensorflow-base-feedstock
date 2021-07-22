@@ -1,6 +1,6 @@
 tflow_variant:
 - gpu
-channel_sources:
-- deepmodeling,defaults
-channel_targets:
-- deepmodeling main
+c_compiler_version:
+- 5
+cxx_compiler_version:
+- 5
