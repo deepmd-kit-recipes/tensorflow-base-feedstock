@@ -1,0 +1,401 @@
+From ff54959ac766e6d75bad10c6e40d2537ebed43ee Mon Sep 17 00:00:00 2001
+From: Jinzhe Zeng <jinzhe.zeng@rutgers.edu>
+Date: Thu, 22 Jul 2021 23:59:25 -0400
+Subject: [PATCH 2/2] Revert "[XLA:GPU] Migrate GEMM Thunk emission to MLIR."
+
+This reverts commit bea9ecb9aad42dde0816a6e451320fdf5601f0a0.
+---
+ .../mlir-hlo/Dialect/mhlo/IR/lhlo_gpu_ops.td  | 10 +--
+ .../compiler/mlir/hlo/tests/lhlo_gpu_ops.mlir |  6 +-
+ tensorflow/compiler/mlir/xla/BUILD            |  1 -
+ .../hlo_text_to_lhlo_no_opt.hlotxt            | 74 +---------------
+ .../xla/transforms/mhlo_to_lhlo_with_xla.cc   | 46 ----------
+ .../xla/transforms/mhlo_to_lhlo_with_xla.h    |  2 -
+ .../xla/service/gpu/ir_emitter_unnested.cc    | 87 -------------------
+ .../xla/service/gpu/ir_emitter_unnested.h     |  1 -
+ 8 files changed, 7 insertions(+), 220 deletions(-)
+
+diff --git a/tensorflow/compiler/mlir/hlo/include/mlir-hlo/Dialect/mhlo/IR/lhlo_gpu_ops.td b/tensorflow/compiler/mlir/hlo/include/mlir-hlo/Dialect/mhlo/IR/lhlo_gpu_ops.td
+index b9fe5fb09e6..aff5cd9f95f 100644
+--- a/tensorflow/compiler/mlir/hlo/include/mlir-hlo/Dialect/mhlo/IR/lhlo_gpu_ops.td
++++ b/tensorflow/compiler/mlir/hlo/include/mlir-hlo/Dialect/mhlo/IR/lhlo_gpu_ops.td
+@@ -172,10 +172,9 @@ def LHLOGPU_GEMMOp : LHLOGPU_Op<"gemm"> {
+     Arg<LHLO_Buffer, "", [MemRead]>:$rhs,
+     Arg<LHLO_Buffer, "", [MemRead]>:$output,
+     DotDimensionNumbers:$dot_dimension_numbers,
+-    F64Attr:$alpha_real,
+-    F64Attr:$alpha_imag,
++    F64Attr:$alpha,
+     I64Attr:$batch_size,
+-    OptionalAttr<I64Attr>:$algorithm);
++    I64Attr:$algorithm);
+ }
+ 
+ // output = alpha(lhs * rhs) + beta * bias
+@@ -186,11 +185,10 @@ def LHLOGPU_GEMM_BiasOp : LHLOGPU_Op<"gemm_bias"> {
+     Arg<LHLO_Buffer, "", [MemRead]>:$bias,
+     Arg<LHLO_Buffer, "", [MemRead]>:$output,
+     DotDimensionNumbers:$dot_dimension_numbers,
+-    F64Attr:$alpha_real,
+-    F64Attr:$alpha_imag,
++    F64Attr:$alpha,
+     F64Attr:$beta,
+     I64Attr:$batch_size,
+-    OptionalAttr<I64Attr>:$algorithm);
++    I64Attr:$algorithm);
+ }
+ 
+ def LHLOGPU_CholeskyOp : LHLOGPU_Op<"cholesky"> {
+diff --git a/tensorflow/compiler/mlir/hlo/tests/lhlo_gpu_ops.mlir b/tensorflow/compiler/mlir/hlo/tests/lhlo_gpu_ops.mlir
+index 4ffd0f46a67..4f51074f8df 100644
+--- a/tensorflow/compiler/mlir/hlo/tests/lhlo_gpu_ops.mlir
++++ b/tensorflow/compiler/mlir/hlo/tests/lhlo_gpu_ops.mlir
+@@ -190,8 +190,7 @@ func @gemm(%lhs: memref<5x4xf32>, %rhs: memref<4x5xf32>, %output:memref<5x5xf32>
+        rhs_batching_dimensions = dense<[1,1]> : tensor<2xi64>,
+        lhs_contracting_dimensions = dense<[1,1]> : tensor<2xi64>,
+        rhs_contracting_dimensions = dense<[1,1]> : tensor<2xi64>},
+-       alpha_real = 0.5,
+-       alpha_imag = 0.0,
++       alpha = 0.5,
+        batch_size = 1,
+        algorithm = 0}
+     : (memref<5x4xf32>, memref<4x5xf32>, memref<5x5xf32>) -> ()
+@@ -207,8 +206,7 @@ func @gemm_bias(%lhs: memref<5x4xf32>, %rhs: memref<4x5xf32>,
+        rhs_batching_dimensions = dense<[1,1]> : tensor<2xi64>,
+        lhs_contracting_dimensions = dense<[1,1]> : tensor<2xi64>,
+        rhs_contracting_dimensions = dense<[1,1]> : tensor<2xi64>},
+-       alpha_real = 0.5,
+-       alpha_imag = 0.0,
++       alpha = 0.5,
+        beta = 1.0,
+        batch_size = 1,
+        algorithm = 0}
+diff --git a/tensorflow/compiler/mlir/xla/BUILD b/tensorflow/compiler/mlir/xla/BUILD
+index c3abfbd5598..94e388422d8 100644
+--- a/tensorflow/compiler/mlir/xla/BUILD
++++ b/tensorflow/compiler/mlir/xla/BUILD
+@@ -222,7 +222,6 @@ cc_library(
+         "//tensorflow/compiler/xla/service:hlo",
+         "//tensorflow/compiler/xla/service:hlo_casting_utils",
+         "//tensorflow/compiler/xla/service:hlo_parser",
+-        "//tensorflow/compiler/xla/service/gpu:backend_configs_cc",
+         "//tensorflow/compiler/xla/service/gpu:ir_emission_utils",
+         "//tensorflow/compiler/xla/service/llvm_ir:buffer_assignment_util",
+         "@com_google_absl//absl/algorithm:container",
+diff --git a/tensorflow/compiler/mlir/xla/tests/hlo_to_lhlo_with_xla/hlo_text_to_lhlo_no_opt.hlotxt b/tensorflow/compiler/mlir/xla/tests/hlo_to_lhlo_with_xla/hlo_text_to_lhlo_no_opt.hlotxt
+index 5708ab4c050..a8a86e1f398 100644
+--- a/tensorflow/compiler/mlir/xla/tests/hlo_to_lhlo_with_xla/hlo_text_to_lhlo_no_opt.hlotxt
++++ b/tensorflow/compiler/mlir/xla/tests/hlo_to_lhlo_with_xla/hlo_text_to_lhlo_no_opt.hlotxt
+@@ -109,6 +109,7 @@ ENTRY main {
+ 
+ // -----
+ 
++
+ HloModule Cholesky
+ 
+ // CHECK-LABEL: func @main
+@@ -124,79 +125,6 @@ ENTRY main {
+ 
+ // -----
+ 
+-HloModule Gemm
+-
+-// CHECK-LABEL: func @main
+-// CHECK: "lmhlo_gpu.gemm"
+-// CHECK-SAME: algorithm = 7 : i64
+-// CHECK-SAME: alpha_imag = 0.000000e+00 : f64
+-// CHECK-SAME: alpha_real = 1.000000e+00 : f64
+-// CHECK-SAME: batch_size = 1 : i64
+-// CHECK-SAME: lhs_batching_dimensions = dense<> : tensor<0xi64>
+-// CHECK-SAME: lhs_contracting_dimensions = dense<1> : tensor<1xi64>
+-// CHECK-SAME: rhs_batching_dimensions = dense<> : tensor<0xi64>
+-// CHECK-SAME: rhs_contracting_dimensions = dense<0> : tensor<1xi64>
+-// CHECK: (memref<2x2xf32>, memref<2x2xf32>, memref<2x2xf32>) -> ()
+-ENTRY main {
+-  %A = f32[2,2]{1,0} parameter(0)
+-  %B = f32[2,2]{1,0} parameter(1)
+-  ROOT %sgemm = f32[2,2]{1,0} custom-call(f32[2,2]{1,0} %A, f32[2,2]{1,0} %B),
+-                              custom_call_target="__cublas$gemm",
+-  backend_config="{\"alpha_real\":1,\"alpha_imag\":0,\"beta\":0,\"dot_dimension_numbers\":{\"lhs_contracting_dimensions\":[\"1\"],\"rhs_contracting_dimensions\":[\"0\"],\"lhs_batch_dimensions\":[],\"rhs_batch_dimensions\":[]},\"batch_size\":\"1\",\"selected_algorithm\":\"7\"}"
+-}
+-
+-// -----
+-
+-HloModule GemmBias
+-
+-// CHECK-LABEL: func @main
+-// CHECK: "lmhlo_gpu.gemm_bias"
+-// CHECK-SAME: algorithm = 0 : i64
+-// CHECK-SAME: alpha_imag = 0.000000e+00 : f64
+-// CHECK-SAME: alpha_real = 1.000000e+00 : f64
+-// CHECK-SAME: batch_size = 1 : i64
+-// CHECK-SAME: beta = 1.000000e+00 : f64
+-// CHECK-SAME: lhs_batching_dimensions = dense<> : tensor<0xi64>
+-// CHECK-SAME: lhs_contracting_dimensions = dense<1> : tensor<1xi64>
+-// CHECK-SAME: rhs_batching_dimensions = dense<> : tensor<0xi64>
+-// CHECK-SAME: rhs_contracting_dimensions = dense<0> : tensor<1xi64>
+-// CHECK: (memref<1x1xf32>, memref<1x4xf32>, memref<1x4xf32>, memref<1x4xf32>)
+-ENTRY main {
+-  %A = f32[1,1]{1,0} parameter(0)
+-  %B = f32[1,4]{1,0} parameter(1)
+-  %C = f32[1,4]{1,0} parameter(2)
+-  ROOT %sgemm_add = f32[1,4]{1,0} custom-call(f32[1,1]{0,1} %A, f32[1,4]{1,0} %B, f32[1,4]{1,0} %C),
+-                                  custom_call_target="__cublas$gemm",
+-  backend_config="{\"alpha_real\":1,\"alpha_imag\":0,\"beta\":1,\"dot_dimension_numbers\":{\"lhs_contracting_dimensions\":[\"1\"],\"rhs_contracting_dimensions\":[\"0\"],\"lhs_batch_dimensions\":[],\"rhs_batch_dimensions\":[]},\"batch_size\":\"1\",\"selected_algorithm\":\"0\"}"
+-}
+-
+-// -----
+-
+-HloModule GemmBias
+-
+-// CHECK-LABEL: func @main
+-// CHECK: "lmhlo_gpu.gemm_bias"
+-// CHECK-SAME: algorithm = 0 : i64
+-// CHECK-SAME: alpha_imag = 0.000000e+00 : f64
+-// CHECK-SAME: alpha_real = 1.000000e+00 : f64
+-// CHECK-SAME: batch_size = 1 : i64
+-// CHECK-SAME: beta = 1.000000e+00 : f64
+-// CHECK-SAME: lhs_batching_dimensions = dense<> : tensor<0xi64>
+-// CHECK-SAME: lhs_contracting_dimensions = dense<1> : tensor<1xi64>
+-// CHECK-SAME: rhs_batching_dimensions = dense<> : tensor<0xi64>
+-// CHECK-SAME: rhs_contracting_dimensions = dense<0> : tensor<1xi64>
+-// CHECK: (memref<1x1xf32>, memref<1x4xf32>, memref<1x4xf32>, memref<1x4xf32>)
+-ENTRY main {
+-  %A = f32[1,1]{1,0} parameter(0)
+-  %B = f32[1,4]{1,0} parameter(1)
+-  %C = f32[1,4]{1,0} parameter(2)
+-  ROOT %sgemm_add = f32[1,4]{1,0} custom-call(f32[1,1]{0,1} %A, f32[1,4]{1,0} %B, f32[1,4]{1,0} %C),
+-                                  custom_call_target="__cublas$gemm",
+-  backend_config="{\"alpha_real\":1,\"alpha_imag\":0,\"beta\":1,\"dot_dimension_numbers\":{\"lhs_contracting_dimensions\":[\"1\"],\"rhs_contracting_dimensions\":[\"0\"],\"lhs_batch_dimensions\":[],\"rhs_batch_dimensions\":[]},\"batch_size\":\"1\",\"selected_algorithm\":\"0\"}"
+-}
+-
+-// -----
+-
+ HloModule AllReduce
+ 
+ // Test all-reduce
+diff --git a/tensorflow/compiler/mlir/xla/transforms/mhlo_to_lhlo_with_xla.cc b/tensorflow/compiler/mlir/xla/transforms/mhlo_to_lhlo_with_xla.cc
+index a292308cfaf..9eeda8029c8 100644
+--- a/tensorflow/compiler/mlir/xla/transforms/mhlo_to_lhlo_with_xla.cc
++++ b/tensorflow/compiler/mlir/xla/transforms/mhlo_to_lhlo_with_xla.cc
+@@ -53,7 +53,6 @@ limitations under the License.
+ #include "tensorflow/compiler/xla/debug_options_flags.h"
+ #include "tensorflow/compiler/xla/service/backend.h"
+ #include "tensorflow/compiler/xla/service/buffer_assignment.h"
+-#include "tensorflow/compiler/xla/service/gpu/backend_configs.pb.h"
+ #include "tensorflow/compiler/xla/service/gpu/ir_emission_utils.h"
+ #include "tensorflow/compiler/xla/service/hlo_casting_utils.h"
+ #include "tensorflow/compiler/xla/service/hlo_computation.h"
+@@ -649,10 +648,6 @@ StatusOr<mlir::Operation*> LhloDialectEmitter::EmitCustomCallOp(
+     return EmitCholesky(custom_call_instr);
+   }
+ 
+-  if (xla::gpu::IsCublasGemm(*instr)) {
+-    return EmitGemm(custom_call_instr);
+-  }
+-
+   if (xla::gpu::IsCustomCallToDnnConvolution(*instr)) {
+     return EmitDnnConvolution(custom_call_instr);
+   }
+@@ -733,47 +728,6 @@ StatusOr<lmhlo_gpu::CholeskyOp> LhloDialectEmitter::EmitCholesky(
+   return cholesky_op;
+ }
+ 
+-StatusOr<Operation*> LhloDialectEmitter::EmitGemm(
+-    const HloCustomCallInstruction* custom_call) {
+-  TF_ASSIGN_OR_RETURN(
+-      auto const config,
+-      custom_call->backend_config<xla::gpu::GemmBackendConfig>());
+-
+-  auto set_common_attributes = [&](auto op) -> Operation* {
+-    auto hlo_dims = config.dot_dimension_numbers();
+-    auto mlir_dims = mhlo::DotDimensionNumbers::get(
+-        GetI64DenseElementsAttr(hlo_dims.lhs_batch_dimensions()),
+-        GetI64DenseElementsAttr(hlo_dims.rhs_batch_dimensions()),
+-        GetI64DenseElementsAttr(hlo_dims.lhs_contracting_dimensions()),
+-        GetI64DenseElementsAttr(hlo_dims.rhs_contracting_dimensions()),
+-        builder_.getContext());
+-    op.dot_dimension_numbersAttr(mlir_dims);
+-    op.alpha_realAttr(builder_.getF64FloatAttr(config.alpha_real()));
+-    op.alpha_imagAttr(builder_.getF64FloatAttr(config.alpha_imag()));
+-    op.batch_sizeAttr(builder_.getI64IntegerAttr(config.batch_size()));
+-    if (config.algorithm_case() ==
+-        xla::gpu::GemmBackendConfig::kSelectedAlgorithm) {
+-      op.algorithmAttr(builder_.getI64IntegerAttr(config.selected_algorithm()));
+-    }
+-    return op.getOperation();
+-  };
+-
+-  if (custom_call->operand_count() == 2) {
+-    TF_ASSIGN_OR_RETURN(auto gemm,
+-                        CreateOpWithoutAttrs<lmhlo_gpu::GEMMOp>(custom_call));
+-    return set_common_attributes(gemm);
+-  }
+-
+-  if (custom_call->operand_count() == 3) {
+-    TF_ASSIGN_OR_RETURN(
+-        auto gemm_bias,
+-        CreateOpWithoutAttrs<lmhlo_gpu::GEMM_BiasOp>(custom_call));
+-    gemm_bias.betaAttr(builder_.getF64FloatAttr(config.beta()));
+-    return set_common_attributes(gemm_bias);
+-  }
+-
+-  return xla::InvalidArgument("GEMM custom call should have 2 or 3 operands");
+-}
+ 
+ static StatusOr<mlir::lmhlo_gpu::Activation> GetLHLOActivation(
+     stream_executor::dnn::ActivationMode activation) {
+diff --git a/tensorflow/compiler/mlir/xla/transforms/mhlo_to_lhlo_with_xla.h b/tensorflow/compiler/mlir/xla/transforms/mhlo_to_lhlo_with_xla.h
+index 0184dc8f79a..df650e37bd9 100644
+--- a/tensorflow/compiler/mlir/xla/transforms/mhlo_to_lhlo_with_xla.h
++++ b/tensorflow/compiler/mlir/xla/transforms/mhlo_to_lhlo_with_xla.h
+@@ -67,8 +67,6 @@ class LhloDialectEmitter : public xla::ConstDfsHloVisitorWithDefault {
+   xla::StatusOr<Operation*> EmitCustomCallOp(const xla::HloInstruction* instr);
+   xla::StatusOr<lmhlo_gpu::CholeskyOp> EmitCholesky(
+       const xla::HloCustomCallInstruction* custom_call);
+-  xla::StatusOr<Operation*> EmitGemm(
+-      const xla::HloCustomCallInstruction* custom_call);
+   xla::StatusOr<Operation*> EmitDnnConvolution(
+       const xla::HloCustomCallInstruction* custom_call);
+   xla::StatusOr<Operation*> EmitDnnBatchNorm(
+diff --git a/tensorflow/compiler/xla/service/gpu/ir_emitter_unnested.cc b/tensorflow/compiler/xla/service/gpu/ir_emitter_unnested.cc
+index a83f58dad34..a33dcddbbfa 100644
+--- a/tensorflow/compiler/xla/service/gpu/ir_emitter_unnested.cc
++++ b/tensorflow/compiler/xla/service/gpu/ir_emitter_unnested.cc
+@@ -30,7 +30,6 @@ limitations under the License.
+ #include "absl/strings/str_format.h"
+ #include "absl/types/optional.h"
+ #include "absl/types/span.h"
+-#include "llvm/ADT/APInt.h"
+ #include "llvm/ADT/SetVector.h"
+ #include "llvm/ADT/StringRef.h"
+ #include "llvm/IR/BasicBlock.h"
+@@ -73,7 +72,6 @@ limitations under the License.
+ #include "tensorflow/compiler/xla/service/gpu/custom_call_thunk.h"
+ #include "tensorflow/compiler/xla/service/gpu/fft_thunk.h"
+ #include "tensorflow/compiler/xla/service/gpu/for_thunk.h"
+-#include "tensorflow/compiler/xla/service/gpu/gemm_thunk.h"
+ #include "tensorflow/compiler/xla/service/gpu/gpu_constants.h"
+ #include "tensorflow/compiler/xla/service/gpu/gpu_conv_runner.h"
+ #include "tensorflow/compiler/xla/service/gpu/hlo_to_ir_bindings.h"
+@@ -1103,10 +1101,6 @@ Status IrEmitterUnnested::EmitCustomCallFromMlir(MlirEmitterInput input) {
+     return EmitCustomCallThunkFromMlir(input);
+   }
+ 
+-  if (isa<mlir::lmhlo_gpu::GEMMOp, mlir::lmhlo_gpu::GEMM_BiasOp>(input.op)) {
+-    return EmitGemmThunkFromMlir(input);
+-  }
+-
+   if (mlir::isa<mlir::lmhlo_gpu::ConvForwardOp,
+                 mlir::lmhlo_gpu::ConvForwardFusedOp,
+                 mlir::lmhlo_gpu::ConvForwardFusedSideInputOp,
+@@ -1244,82 +1238,6 @@ Status IrEmitterUnnested::EmitConvolutionThunkFromMlir(MlirEmitterInput input) {
+   return Status::OK();
+ }
+ 
+-Status IrEmitterUnnested::EmitGemmThunkFromMlir(MlirEmitterInput input) {
+-  auto build_gemm_config = [](auto op) {
+-    GpuGemmConfig config;
+-    GemmBackendConfig& backend = config.backend_config;
+-    config.output_shape = TypeToShape(op.output().getType());
+-    config.lhs_shape = TypeToShape(op.lhs().getType());
+-    config.rhs_shape = TypeToShape(op.rhs().getType());
+-    backend.Clear();
+-    if (op.algorithm()) {
+-      backend.set_selected_algorithm(*op.algorithm());
+-    }
+-    backend.set_alpha_real(op.alpha_real().convertToDouble());
+-    backend.set_alpha_imag(op.alpha_imag().convertToDouble());
+-    backend.set_batch_size(op.batch_size());
+-
+-    auto& dims = *backend.mutable_dot_dimension_numbers();
+-    auto mlir_dims = op.dot_dimension_numbers();
+-
+-    auto fill_dims = [](mlir::DenseElementsAttr mlir_dim, auto* config_attrs) {
+-      for (llvm::APInt e : mlir_dim.getIntValues())
+-        config_attrs->Add(e.getSExtValue());
+-    };
+-    fill_dims(mlir_dims.lhs_batching_dimensions(),
+-              dims.mutable_lhs_batch_dimensions());
+-    fill_dims(mlir_dims.rhs_batching_dimensions(),
+-              dims.mutable_rhs_batch_dimensions());
+-    fill_dims(mlir_dims.lhs_contracting_dimensions(),
+-              dims.mutable_lhs_contracting_dimensions());
+-    fill_dims(mlir_dims.rhs_contracting_dimensions(),
+-              dims.mutable_rhs_contracting_dimensions());
+-    return config;
+-  };
+-
+-  GpuGemmConfig config;
+-  BufferAllocation::Slice lhs, rhs, bias, output;
+-
+-  if (auto gemm = mlir::dyn_cast<mlir::lmhlo_gpu::GEMMOp>(input.op)) {
+-    config = build_gemm_config(gemm);
+-    TF_ASSIGN_OR_RETURN(lhs, GetAllocationSliceForMlir(gemm.lhs()));
+-    TF_ASSIGN_OR_RETURN(rhs, GetAllocationSliceForMlir(gemm.rhs()));
+-    TF_ASSIGN_OR_RETURN(output, GetAllocationSliceForMlir(gemm.output()));
+-  } else if (auto gemm_bias =
+-                 mlir::dyn_cast<mlir::lmhlo_gpu::GEMM_BiasOp>(input.op)) {
+-    config = build_gemm_config(gemm_bias);
+-    config.backend_config.set_beta(gemm_bias.beta().convertToDouble());
+-    TF_ASSIGN_OR_RETURN(lhs, GetAllocationSliceForMlir(gemm_bias.lhs()));
+-    TF_ASSIGN_OR_RETURN(rhs, GetAllocationSliceForMlir(gemm_bias.rhs()));
+-    TF_ASSIGN_OR_RETURN(bias, GetAllocationSliceForMlir(gemm_bias.bias()));
+-    TF_ASSIGN_OR_RETURN(output, GetAllocationSliceForMlir(gemm_bias.output()));
+-
+-    // The bias is passed inside the output buffer. If those buffers are shared
+-    // we can just use it, otherwise copy the bias values into the output buffer
+-    // first.
+-    if (bias != output) {
+-      std::vector<std::unique_ptr<Thunk>> thunks;
+-
+-      thunks.push_back(absl::make_unique<DeviceToDeviceCopyThunk>(
+-          Thunk::ThunkInfo(),
+-          /*source_buffer=*/bias,
+-          /*destination_buffer=*/output,
+-          /*mem_size=*/ShapeUtil::ByteSizeOf(config.output_shape)));
+-      thunks.push_back(absl::make_unique<GemmThunk>(
+-          input.thunk_info, std::move(config), lhs, rhs, output,
+-          /*implements_whole_instruction=*/false));
+-      AddThunkToThunkSequence(absl::make_unique<SequentialThunk>(
+-          input.thunk_info, std::move(thunks)));
+-      return Status::OK();
+-    }
+-  }
+-
+-  AddThunkToThunkSequence(absl::make_unique<GemmThunk>(
+-      input.thunk_info, std::move(config), lhs, rhs, output,
+-      /*implements_whole_instruction=*/true));
+-  return Status::OK();
+-}
+-
+ namespace {
+ // An MLIR value and its name as defined in the ODS spec.
+ struct NamedValue {
+@@ -5811,11 +5729,6 @@ Status IrEmitterUnnested::EmitOp(MlirEmitterInput mlir_input) {
+     return EmitCustomCallThunkFromMlir(mlir_input);
+   }
+ 
+-  if (mlir::isa<mlir::lmhlo_gpu::GEMMOp, mlir::lmhlo_gpu::GEMM_BiasOp>(
+-          mlir_input.op)) {
+-    return EmitGemmThunkFromMlir(mlir_input);
+-  }
+-
+   if (mlir::isa<mlir::lmhlo_gpu::ConvForwardOp,
+                 mlir::lmhlo_gpu::ConvForwardFusedOp,
+                 mlir::lmhlo_gpu::ConvForwardFusedSideInputOp,
+diff --git a/tensorflow/compiler/xla/service/gpu/ir_emitter_unnested.h b/tensorflow/compiler/xla/service/gpu/ir_emitter_unnested.h
+index 8d8805a6d4a..37e61561570 100644
+--- a/tensorflow/compiler/xla/service/gpu/ir_emitter_unnested.h
++++ b/tensorflow/compiler/xla/service/gpu/ir_emitter_unnested.h
+@@ -161,7 +161,6 @@ class IrEmitterUnnested : public IrEmitter {
+   Status HandleCustomCall(HloInstruction* custom_call) override;
+   Status EmitCustomCallFromMlir(MlirEmitterInput input);
+   Status EmitConvolutionThunkFromMlir(MlirEmitterInput input);
+-  Status EmitGemmThunkFromMlir(MlirEmitterInput input);
+   Status EmitBatchNormThunkFromMlir(MlirEmitterInput input);
+ #if GOOGLE_CUDA
+   Status EmitCholeskyThunkFromMlir(MlirEmitterInput input);
+-- 
+2.31.1
+

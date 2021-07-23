@@ -3,7 +3,7 @@ c_compiler:
 c_compiler_version:
 - '5'
 channel_sources:
-- deepmodeling,https://conda.deepmodeling.org,defaults
+- deepmodeling,https://deepmodeling.njzjz.win,defaults
 channel_targets:
 - deepmodeling main
 cuda_compiler_version:

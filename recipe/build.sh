@@ -20,7 +20,7 @@ export CUDA_TOOLKIT_PATH=/usr/local/cuda
 # do not build with MKL support
 export TF_NEED_MKL=0
 export CC_OPT_FLAGS="-march=nocona -mtune=haswell"
-export TF_ENABLE_XLA=1
+export TF_ENABLE_XLA=0
 export TF_NEED_OPENCL=0
 export TF_NEED_OPENCL_SYCL=0
 export TF_NEED_COMPUTECPP=0
