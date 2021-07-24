@@ -11,7 +11,7 @@ source:
   sha256: 233875ea27fc357f6b714b2a0de5f6ff124b50c1ee9b3b41f9e726e9e677b86c
   patches:
     - 0001-use-std-make_tuple.patch
-    #- 0002-Revert-XLA-GPU-Migrate-GEMM-Thunk-emission-to-MLIR.patch
+    - 48393.patch
     - 0004-loosen-requirements.patch
     - tensorflow_win_zip64.patch                           # [win]
     # general patches
@@ -111,7 +111,7 @@ requirements:
     # has run_exports, doesn't need a run dep below
     #- sqlite
     #- snappy
-    - typing_extensions >=3.7.4
+    #- typing_extensions >=3.7.4
     - tensorboard >=2.5.0,<2.6
     - tensorflow-estimator >=2.5.0,<2.6
     # GPU requirements
