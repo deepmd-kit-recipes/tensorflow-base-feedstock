@@ -1,0 +1,44 @@
+From 403eb63b5644feaa1ba2edd193d35bb40adbce4b Mon Sep 17 00:00:00 2001
+From: Jinzhe Zeng <jinzhe.zeng@rutgers.edu>
+Date: Sun, 25 Jul 2021 00:28:27 -0400
+Subject: [PATCH 2/2] Absl error
+
+---
+ .bazelrc                                            |  2 ++
+ .../com_google_absl_fix_mac_and_nvcc_build.patch    | 13 +++++++++++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/.bazelrc b/.bazelrc
+index fcef170dded..37cbb163257 100644
+--- a/.bazelrc
++++ b/.bazelrc
+@@ -605,3 +605,5 @@ build:ubsan --copt -O3
+ build:ubsan --copt -fno-omit-frame-pointer
+ build:ubsan --linkopt -fsanitize=undefined
+ build:ubsan --linkopt -lubsan
++build:opt --copt=-DNO_CONSTEXPR_FOR_YOU=1
++build:opt --host_copt=-DNO_CONSTEXPR_FOR_YOU=1
+diff --git a/third_party/absl/com_google_absl_fix_mac_and_nvcc_build.patch b/third_party/absl/com_google_absl_fix_mac_and_nvcc_build.patch
+index 1b531907926..91f3889ad6a 100644
+--- a/third_party/absl/com_google_absl_fix_mac_and_nvcc_build.patch
++++ b/third_party/absl/com_google_absl_fix_mac_and_nvcc_build.patch
+@@ -333,3 +333,16 @@ index 45a9529..57c954e 100644
+      visibility = ["//visibility:public"],
+      deps = [
+          ":civil_time",
++diff --git a/absl/time/internal/cctz/include/cctz/civil_time_detail.h b/absl/time/internal/cctz/include/cctz/civil_time_detail.h
++index d1b4222..6d2804a 100644
++--- a/absl/time/internal/cctz/include/cctz/civil_time_detail.h
+++++ b/absl/time/internal/cctz/include/cctz/civil_time_detail.h
++@@ -23,7 +23,7 @@
++ #include "absl/base/config.h"
++
++ // Disable constexpr support unless we are in C++14 mode.
++-#if __cpp_constexpr >= 201304 || (defined(_MSC_VER) && _MSC_VER >= 1910)
+++#if (!defined(NO_CONSTEXPR_FOR_YOU) && __cpp_constexpr >= 201304) || (defined(_MSC_VER) && _MSC_VER >= 1910)
++ #define CONSTEXPR_D constexpr  // data
++ #define CONSTEXPR_F constexpr  // function
++ #define CONSTEXPR_M constexpr  // member
+-- 
+2.31.1
+

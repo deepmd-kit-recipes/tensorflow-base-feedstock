@@ -12,11 +12,13 @@ source:
   patches:
     - 0001-use-std-make_tuple.patch
     - 48393.patch
+    - 48588.patch
     - 0004-loosen-requirements.patch
     - tensorflow_win_zip64.patch                           # [win]
     # general patches
     - 0101-include-c-and-cc-headers.patch                  # [linus]
     - 0103-BUILD-changes-for-external-sqlite-package.patch # [linux]
+    - 0106-Upstream-patch-for-absl-error.patch
     - 0107-do-not-hardcode-ca-cert-location.patch          # [linux]
     # gpu specific patches
     - 0201-add-additional-cuda-rpaths.patch                # [linux]

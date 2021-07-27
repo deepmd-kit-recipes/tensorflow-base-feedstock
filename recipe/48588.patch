@@ -1,0 +1,56 @@
+From e5b6829e8ba40b6900c819aab6cf58469c64bd4b Mon Sep 17 00:00:00 2001
+From: Koan-Sin Tan <koansin.tan@gmail.com>
+Date: Fri, 16 Apr 2021 08:44:40 +0800
+Subject: [PATCH 1/2] CUDA 10.2 doesn't work well with CORD
+
+---
+ tensorflow/core/platform/default/cord.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/tensorflow/core/platform/default/cord.h b/tensorflow/core/platform/default/cord.h
+index cdfab1e5da905..febd6fa08ba77 100644
+--- a/tensorflow/core/platform/default/cord.h
++++ b/tensorflow/core/platform/default/cord.h
+@@ -16,7 +16,12 @@ limitations under the License.
+ #ifndef TENSORFLOW_CORE_PLATFORM_DEFAULT_CORD_H_
+ #define TENSORFLOW_CORE_PLATFORM_DEFAULT_CORD_H_
+ 
++// It seems CORD doesn't work well with CUDA <= 10.2
++#if !defined(__CUDACC__) || ((defined(__CUDACC__) && CUDA_VERSOIN > 10020))
++
+ #include "absl/strings/cord.h"
+ #define TF_CORD_SUPPORT 1
+ 
++#endif  // __CUDACC__
++
+ #endif  // TENSORFLOW_CORE_PLATFORM_DEFAULT_CORD_H_
+
+From 4933ada8c2b4b523acc94baea2609f0cce70a083 Mon Sep 17 00:00:00 2001
+From: Koan-Sin Tan <koansin.tan@gmail.com>
+Date: Fri, 16 Apr 2021 09:54:28 +0800
+Subject: [PATCH 2/2] enable llvm::AArch64CodeGen
+
+needed by mlir, e.g.,
+`//tensorflow/compiler/mlir/tools/kernel_gen/tf_to_kernel`
+---
+ tensorflow/core/platform/default/build_config.bzl | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/tensorflow/core/platform/default/build_config.bzl b/tensorflow/core/platform/default/build_config.bzl
+index bef34eec8da64..4670f9c7f6f3d 100644
+--- a/tensorflow/core/platform/default/build_config.bzl
++++ b/tensorflow/core/platform/default/build_config.bzl
+@@ -798,9 +798,10 @@ def tf_google_mobile_srcs_only_runtime():
+     return []
+ 
+ def if_llvm_aarch64_available(then, otherwise = []):
+-    # TODO(b/...): The TF XLA build fails when adding a dependency on
+-    # @llvm/llvm-project/llvm:aarch64_target.
+-    return otherwise
++    return select({
++        "//tensorflow:linux_aarch64": then,
++        "//conditions:default": otherwise,
++    })
+ 
+ def if_llvm_system_z_available(then, otherwise = []):
+     return select({
