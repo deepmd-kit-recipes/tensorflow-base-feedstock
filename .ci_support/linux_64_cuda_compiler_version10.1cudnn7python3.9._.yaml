@@ -1,13 +1,11 @@
-aws_sdk_cpp:
-- 1.8.185
 c_compiler:
 - gcc
 c_compiler_version:
-- '5.4'
+- '5'
 cdt_name:
-- cos6
+- cos7
 channel_sources:
-- deepmodeling,nvidia,defaults
+- deepmodeling,https://deepmodeling.njzjz.win,defaults
 channel_targets:
 - deepmodeling main
 cuda_compiler:
@@ -19,23 +17,15 @@ cudnn:
 cxx_compiler:
 - gxx
 cxx_compiler_version:
-- '5.4'
+- '5'
 docker_image:
-- quay.io/condaforge/linux-anvil-cuda:10.1
-numpy:
-- '1.16'
+- quay.io/condaforge/linux-anvil-cos7-cuda:10.1
 pin_run_as_build:
   python:
     min_pin: x.x
     max_pin: x.x
-  sqlite:
-    max_pin: x
-  zlib:
-    max_pin: x.x
 python:
 - 3.9.*
-sqlite:
-- '3'
 target_platform:
 - linux-64
 tflow_variant:
@@ -47,11 +37,3 @@ zip_keys:
   - cuda_compiler_version
   - cdt_name
   - docker_image
-- - cudnn
-  - cuda_compiler_version
-  - docker_image
-  - cdt_name
-- - python
-  - numpy
-zlib:
-- '1.2'
